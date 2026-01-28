@@ -6,6 +6,7 @@ Physically-correct scalar-wave summation, optimized and deployable.
 import streamlit as st
 import numpy as np
 import sys
+st.runtime.scriptrunner.magic_file_watcher = False
 
 # Try to import matplotlib with a headless backend first (Agg).
 try:
