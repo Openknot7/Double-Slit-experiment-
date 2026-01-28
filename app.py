@@ -138,7 +138,7 @@ with left:
         caption="Probability density |ψ(x,y)|²",
         use_column_width=True
     )
-
+for
 with right:
     st.subheader("Screen detections")
     if len(st.session_state.hits) > 5:
@@ -150,5 +150,9 @@ with right:
 # STREAMLIT ANIMATION CLOCK
 # =========================================================
 if st.session_state.running:
-    time.sleep(0.05)
-    st.experimental_rerun()
+       # Refresh every 50 ms to animate
+    from streamlit_autorefresh import st_autorefresh
+    st_autorefresh(interval=50, limit=None, key="double_slit_timer")
+    
+    
+    
