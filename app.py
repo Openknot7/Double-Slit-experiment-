@@ -5,10 +5,6 @@ Physically-correct scalar-wave summation, optimized and deployable.
 """
 import streamlit as st
 import numpy as np
-import matplotlib.pyplot as plt
-import time
-
-# app.py — top of file: robust matplotlib import for headless/cloud environments
 import sys
 
 # Try to import matplotlib with a headless backend first (Agg).
@@ -27,6 +23,12 @@ except Exception as e:
     except Exception as e2:
         print("Error: both matplotlib and plotly failed to import:", e2, file=sys.stderr)
         raise RuntimeError("Require matplotlib or plotly in environment") from e2
+
+
+import matplotlib.pyplot as plt
+import time
+
+# app.py — top of file: robust matplotlib import for headless/cloud environments
 
 # ---------------- Page config ----------------
 st.set_page_config(page_title="Double-Slit Simulation", layout="wide")
