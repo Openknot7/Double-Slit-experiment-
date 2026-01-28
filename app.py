@@ -8,6 +8,26 @@ import numpy as np
 import matplotlib.pyplot as plt
 import time
 
+# app.py — top of file: robust matplotlib import for headless/cloud environments
+import sys
+
+# Try to import matplotlib with a headless backend first (Agg).
+try:
+    import matplotlib
+    # set non-interactive backend before importing pyplot
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+except Exception as e:
+    # If matplotlib is missing or fails, fall back to Plotly (pure-python, no backend)
+    print("Warning: matplotlib import failed:", e, file=sys.stderr)
+    plt = None
+    try:
+        import plotly.express as px
+        import plotly.graph_objects as go
+    except Exception as e2:
+        print("Error: both matplotlib and plotly failed to import:", e2, file=sys.stderr)
+        raise RuntimeError("Require matplotlib or plotly in environment") from e2
+
 # ---------------- Page config ----------------
 st.set_page_config(page_title="Double-Slit Simulation", layout="wide")
 st.title("Double-Slit Experiment — Interactive Simulation")
