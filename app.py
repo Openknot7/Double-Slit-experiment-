@@ -9,7 +9,7 @@ st.set_page_config(page_title="Double-Slit Quantum Simulation", layout="wide")
 st.title("Double-Slit Experiment — Quantum-Accurate Live Simulation")
 
 st.markdown("""
-This simulation solves the **time-dependent Schrödinger equation** in 2D.
+This simulation solves the **2D time-dependent Schrödinger equation**.
 Each dot on the screen represents a **single detection event** sampled from
 the wavefunction probability density |ψ|².
 """)
@@ -38,6 +38,7 @@ barrier_x = -Lx/2 + 0.45 * Lx
 ix = np.argmin(np.abs(x - barrier_x))
 
 for j in range(Ny):
+    # Infinite barrier except slits
     if not (
         abs(y[j] - slit_sep/2) < slit_width/2 or
         abs(y[j] + slit_sep/2) < slit_width/2
@@ -51,11 +52,13 @@ x0, y0 = -4.5, 0.0
 sigma_x, sigma_y = 0.8, 1.0
 k0 = 6.0
 
-psi0 = np.exp(
-    -((X - x0)**2)/(2*sigma_x**2)
-    -((Y - y0)**2)/(2*sigma_y**2)
-)
+# Create complex wavefunction from start
+psi0 = np.empty((Ny, Nx), dtype=np.complex128)
+psi0.real = np.exp(-((X - x0)**2)/(2*sigma_x**2) - ((Y - y0)**2)/(2*sigma_y**2))
+psi0.imag = 0.0
 psi0 *= np.exp(1j * k0 * X)
+
+# Normalize
 psi0 /= np.sqrt(np.sum(np.abs(psi0)**2) * dx * dy)
 
 # =========================================================
@@ -66,9 +69,10 @@ ky = 2*np.pi*np.fft.fftfreq(Ny, dy)
 KX, KY = np.meshgrid(kx, ky)
 K2 = KX**2 + KY**2
 
-dt = 0.005  # numerically stable time step
+dt = 0.005  # stable time step
 
 def propagate(psi):
+    """One time-step propagation (split-step FFT method)."""
     psi *= np.exp(-1j * V * dt / 2)
     psi_k = np.fft.fft2(psi)
     psi_k *= np.exp(-1j * K2 * dt / 2)
@@ -111,11 +115,12 @@ if st.session_state.running:
 # DETECTION (BORN RULE)
 # =========================================================
 prob = np.abs(st.session_state.psi)**2
-screen_ix = int(Nx * 0.9)
+screen_ix = int(Nx * 0.9)  # screen at right edge
 
 p_slice = prob[:, screen_ix]
 p_slice /= (p_slice.sum() + 1e-15)
 
+# Randomly add a detection hit
 if st.session_state.running and np.random.rand() < 0.35:
     iy = np.random.choice(len(y), p=p_slice)
     st.session_state.hits.append(y[iy])
