@@ -1,6 +1,5 @@
 import streamlit as st
 import numpy as np
-import time
 
 # =========================================================
 # CONFIG
@@ -15,11 +14,10 @@ the wavefunction probability density |ψ|².
 """)
 
 # =========================================================
-# GRID (dimensionless natural units: ħ = m = 1)
+# GRID (dimensionless units)
 # =========================================================
 Nx, Ny = 240, 160
 Lx, Ly = 14.0, 9.0
-
 x = np.linspace(-Lx/2, Lx/2, Nx)
 y = np.linspace(-Ly/2, Ly/2, Ny)
 dx = x[1] - x[0]
@@ -27,22 +25,16 @@ dy = y[1] - y[0]
 X, Y = np.meshgrid(x, y)
 
 # =========================================================
-# POTENTIAL — DOUBLE SLIT
+# DOUBLE SLIT POTENTIAL
 # =========================================================
 V = np.zeros((Ny, Nx))
 V0 = 1e5
-
 slit_sep = 1.2
 slit_width = 0.5
 barrier_x = -Lx/2 + 0.45 * Lx
 ix = np.argmin(np.abs(x - barrier_x))
-
 for j in range(Ny):
-    # Infinite barrier except slits
-    if not (
-        abs(y[j] - slit_sep/2) < slit_width/2 or
-        abs(y[j] + slit_sep/2) < slit_width/2
-    ):
+    if not (abs(y[j] - slit_sep/2) < slit_width/2 or abs(y[j] + slit_sep/2) < slit_width/2):
         V[j, ix] = V0
 
 # =========================================================
@@ -52,13 +44,10 @@ x0, y0 = -4.5, 0.0
 sigma_x, sigma_y = 0.8, 1.0
 k0 = 6.0
 
-# Create complex wavefunction from start
 psi0 = np.empty((Ny, Nx), dtype=np.complex128)
 psi0.real = np.exp(-((X - x0)**2)/(2*sigma_x**2) - ((Y - y0)**2)/(2*sigma_y**2))
 psi0.imag = 0.0
 psi0 *= np.exp(1j * k0 * X)
-
-# Normalize
 psi0 /= np.sqrt(np.sum(np.abs(psi0)**2) * dx * dy)
 
 # =========================================================
@@ -68,11 +57,9 @@ kx = 2*np.pi*np.fft.fftfreq(Nx, dx)
 ky = 2*np.pi*np.fft.fftfreq(Ny, dy)
 KX, KY = np.meshgrid(kx, ky)
 K2 = KX**2 + KY**2
-
-dt = 0.005  # stable time step
+dt = 0.005
 
 def propagate(psi):
-    """One time-step propagation (split-step FFT method)."""
     psi *= np.exp(-1j * V * dt / 2)
     psi_k = np.fft.fft2(psi)
     psi_k *= np.exp(-1j * K2 * dt / 2)
@@ -87,6 +74,8 @@ if "psi" not in st.session_state:
     st.session_state.psi = psi0.copy()
     st.session_state.running = False
     st.session_state.hits = []
+    st.session_state.frame = 0
+    st.session_state.last_frame = 0
 
 # =========================================================
 # CONTROLS
@@ -103,24 +92,28 @@ with c3:
         st.session_state.psi = psi0.copy()
         st.session_state.hits = []
         st.session_state.running = False
+        st.session_state.frame = 0
+        st.session_state.last_frame = 0
 
 # =========================================================
-# TIME EVOLUTION
+# ADVANCE FRAMES (Streamlit-native)
 # =========================================================
 if st.session_state.running:
-    for _ in range(3):
-        st.session_state.psi = propagate(st.session_state.psi)
+    st.session_state.frame += 1  # increment frame automatically
+
+# propagate difference since last frame
+for _ in range(st.session_state.frame - st.session_state.last_frame):
+    st.session_state.psi = propagate(st.session_state.psi)
+st.session_state.last_frame = st.session_state.frame
 
 # =========================================================
-# DETECTION (BORN RULE)
+# DETECTION (Born rule)
 # =========================================================
 prob = np.abs(st.session_state.psi)**2
-screen_ix = int(Nx * 0.9)  # screen at right edge
-
+screen_ix = int(Nx * 0.9)
 p_slice = prob[:, screen_ix]
 p_slice /= (p_slice.sum() + 1e-15)
 
-# Randomly add a detection hit
 if st.session_state.running and np.random.rand() < 0.35:
     iy = np.random.choice(len(y), p=p_slice)
     st.session_state.hits.append(y[iy])
@@ -132,13 +125,8 @@ left, right = st.columns([2, 1])
 
 with left:
     img = prob / prob.max()
-    st.image(
-        (img * 255).astype(np.uint8),
-        clamp=True,
-        caption="Probability density |ψ(x,y)|²",
-        use_column_width=True
-    )
-for
+    st.image((img*255).astype(np.uint8), clamp=True, caption="|ψ(x,y)|²", use_column_width=True)
+
 with right:
     st.subheader("Screen detections")
     if len(st.session_state.hits) > 5:
@@ -147,12 +135,7 @@ with right:
         st.bar_chart(hist)
 
 # =========================================================
-# STREAMLIT ANIMATION CLOCK
+# AUTO-REFRESH FOR LIVE ANIMATION (Streamlit-native)
 # =========================================================
 if st.session_state.running:
-       # Refresh every 50 ms to animate
-    from streamlit_autorefresh import st_autorefresh
-    st_autorefresh(interval=50, limit=None, key="double_slit_timer")
-    
-    
-    
+    st.experimental_rerun()
