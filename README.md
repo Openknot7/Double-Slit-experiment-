@@ -1,113 +1,66 @@
-# Double-Slit-experiment-
+# Quantum Double-Slit Simulator 🌊
 
-# Double-Slit Experiment — Interactive Simulation (Streamlit)
-
-An interactive **Python + Streamlit** simulation of the classic **Young’s Double-Slit Experiment**, built using **physically correct scalar wave summation**.
-
-This app visualizes **interference and diffraction** by explicitly summing wave amplitudes from each slit, rather than using pre-derived intensity formulas.
+An interactive, research-grade simulation of the **2D Time-Dependent Schrödinger Equation (TDSE)**. This application visualizes wave-particle duality by propagating a quantum wave packet through a double-slit barrier and simulating individual particle detections on a screen.
 
 ---
 
-## 🔬 Physics Background
+## 🔬 Physics and Mathematical Framework
 
-The double-slit experiment demonstrates the **wave nature of light**.
+The simulation is governed by the non-relativistic Schrödinger Equation:
 
-When coherent light passes through two narrow slits:
-- Each slit acts as a secondary source
-- Waves interfere on a distant screen
-- Bright and dark fringes appear due to phase differences
+$$i\hbar \frac{\partial}{\partial t} \psi(\mathbf{r}, t) = \hat{H} \psi(\mathbf{r}, t)$$
 
-This experiment is foundational to:
-- Classical wave optics
-- Quantum mechanics (wave–particle duality)
+Where the Hamiltonian operator $\hat{H}$ is defined as:
 
----
+$$\hat{H} = -\frac{\hbar^2}{2m} \nabla^2 + V(\mathbf{r})$$
 
-## 🧠 Physical Model Used
+### 1. The Wave Packet
+We initialize the system as a **Gaussian Wave Packet** with a specific momentum $k_0$ in the $x$-direction:
 
-This simulation follows the **Huygens–Fresnel principle**:
+$$\psi(x, y, 0) = \exp \left( -\frac{(x-x_0)^2 + (y-y_0)^2}{2\sigma^2} \right) e^{ik_0 x}$$
 
-- Light is treated as a monochromatic scalar wave
-- Each slit is divided into many point sources
-- The complex wave amplitude is summed at each screen point
-- Intensity is computed as the squared magnitude of the total field
 
-No small-angle or far-field approximation is forced.
 
----
+### 2. Numerical Integration (Split-Step Fourier Method)
+To solve the TDSE efficiently in real-time, the code uses the **Split-Step Fourier Method (SSFM)**. This method "splits" the potential and kinetic energy operators. For a small time step $\Delta t$, the evolution is:
 
-## 📐 Mathematical Formulation
+$$\psi(t + \Delta t) \approx e^{-i \frac{V}{2} \Delta t} e^{-i \hat{T} \Delta t} e^{-i \frac{V}{2} \Delta t} \psi(t)$$
 
-### 1. Wave from a point source
-\[
-\psi(r) = \frac{1}{r} e^{i k r}
-\]
-where  
-- \( r \) = distance from slit point to screen point  
-- \( k = \frac{2\pi}{\lambda} \)  
-- \( \lambda \) = wavelength  
+* **Potential Step:** Multiplied in the position domain.
+* **Kinetic Step:** Multiplied in the frequency (momentum) domain using Fast Fourier Transforms (FFT), where $\nabla^2$ becomes $-k^2$:
+    $$\hat{T} \psi \xrightarrow{\mathcal{F}} \frac{\hbar^2 k^2}{2m} \tilde{\psi}$$
+
+
+
+### 3. The Born Rule and Measurement
+The simulation bridges the gap between waves and particles using the **Born Rule**. The probability density is given by:
+
+$$P(x, y) = |\psi(x, y)|^2$$.
+
+
+
+In the app, we take a "slice" of this density at the screen position. We use **Monte Carlo sampling** to "detect" individual particles, showing how individual random hits eventually form a deterministic interference pattern.
 
 ---
 
-### 2. Exact path length
-For a screen point \( (x, y) \) and slit sample at \( y_s \):
-\[
-r = \sqrt{x^2 + (y - y_s)^2 + D^2}
-\]
+## 📊 Technical Specifications
+
+| Parameter | Value / Method | Description |
+| :--- | :--- | :--- |
+| **Equation** | TDSE | 2D Time-Dependent Schrödinger Equation |
+| **Numerical Solver** | Split-Step Fourier | Unitary evolution preserving the norm of $\psi$ |
+| **Grid Size** | $128 \times 128$ | Optimized for low-latency browser rendering |
+| **Time Step ($\Delta t$)** | $0.005$ | Balancing stability and simulation speed |
+| **Boundary** | Dirichlet | $\psi = 0$ at the edges of the simulation box |
+| **Measurement** | Monte Carlo | Probabilistic sampling based on $\|\psi\|^2$ |
+| **Visualization** | RGB Normalization | Real-time auto-gain for wave visibility |
 
 ---
 
-### 3. Total field
-\[
-\Psi(x,y) = \sum_{\text{slits}} \sum_{\text{samples}} \frac{e^{i k r}}{r}
-\]
+## 🛠️ Installation & Deployment
 
----
-
-### 4. Intensity
-\[
-I(x,y) = |\Psi(x,y)|^2
-\]
-
-Intensity is normalized for visualization.
-
----
-
-## 📊 What You See
-
-- **1D mode**: intensity along the screen centerline  
-- **2D mode**: full intensity distribution on the screen  
-- Emergent **interference fringes**
-- Natural **single-slit diffraction envelope**
-
----
-
-## 📏 Analytical Reference (for comparison)
-
-Approximate fringe spacing (Fraunhofer limit):
-\[
-\Delta x \approx \frac{\lambda D}{d}
-\]
-
-This formula is **not used** in the simulation — only shown for reference.
-
----
-
-## ⚙️ Parameters Explained
-
-| Parameter | Meaning |
-|---------|--------|
-| Wavelength | Light wavelength (nm) |
-| Slit separation | Center-to-center distance |
-| Slit width | Width of each slit |
-| Screen distance | Distance from slits to screen |
-| Samples per slit | Numerical accuracy |
-| Resolution | Number of screen points |
-
----
-
-## 🚀 How to Run
-
-### Install dependencies
-```bash
-pip install -r requirements.txt
+### Local Setup
+1. Clone this repository.
+2. Install dependencies:
+   ```bash
+   pip install streamlit numpy
