@@ -269,7 +269,7 @@ img = create_visualization(st.session_state.psi, V, gain, barrier_idx)
 plot_spot.image(img, use_container_width=True, channels="RGB")
 
 # Render detection histogram
-if len(st.session_state.hits) > 0:
+if len(st.session_state.hits) > 5:  # Only show real chart when we have enough data
     # Create histogram
     counts, bin_edges = np.histogram(
         st.session_state.hits, 
@@ -285,8 +285,17 @@ if len(st.session_state.hits) > 0:
         info_spot.success(f"✅ Interference pattern emerging! ({len(st.session_state.hits)} particles)")
     else:
         info_spot.info(f"Collecting data... ({len(st.session_state.hits)} particles)")
+        
+elif len(st.session_state.hits) > 0:
+    # Show minimal chart with few detections
+    counts = np.zeros(40)
+    hist_spot.bar_chart(counts, color="#00FFFF", height=400)
+    info_spot.info(f"Collecting data... ({len(st.session_state.hits)} particles)")
+    
 else:
-    hist_spot.markdown("```\n" + "│\n" * 15 + "└" + "─" * 20 + "\n```")
+    # Show empty chart placeholder
+    counts = np.zeros(40)
+    hist_spot.bar_chart(counts, color="#00FFFF", height=400)
     info_spot.warning("⏳ Waiting for wave to reach detector...")
 
 # =========================================================
