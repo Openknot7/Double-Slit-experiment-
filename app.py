@@ -236,12 +236,24 @@ if st.session_state.running:
     # If wave has reached the screen
     if total_p > 1e-6:
         # Normalize to probability distribution
-        pdf = prob_slice / (total_p + 1e-12)
+        pdf = prob_slice / total_p
         
-        # Detect particles based on probability
-        if np.random.rand() < detection_rate:
-            hit_idx = np.random.choice(len(y), p=pdf)
-            st.session_state.hits.append(y[hit_idx])
+        # Ensure PDF is valid (sums to 1, no NaNs or negatives)
+        pdf = np.nan_to_num(pdf, nan=0.0, posinf=0.0, neginf=0.0)
+        pdf = np.abs(pdf)  # Ensure all positive
+        pdf_sum = np.sum(pdf)
+        
+        if pdf_sum > 0:
+            pdf = pdf / pdf_sum  # Renormalize
+            
+            # Detect particles based on probability
+            if np.random.rand() < detection_rate:
+                try:
+                    hit_idx = np.random.choice(len(y), p=pdf)
+                    st.session_state.hits.append(y[hit_idx])
+                except ValueError:
+                    # If still invalid, skip this detection
+                    pass
 
 # =========================================================
 # 7. RENDERING
