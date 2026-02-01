@@ -285,13 +285,19 @@ chart_data = pd.DataFrame({
     'Counts': counts
 })
 
+# Determine Y-axis domain to prevent "Infinite extent" warnings
+max_count = counts.max() if len(counts) > 0 else 0
+# Default to at least 10 on Y-axis if empty, otherwise add some headroom
+y_limit = max(10, max_count * 1.2)
+
 # Create chart with precise domains to avoid Vega-Lite warnings
 chart = alt.Chart(chart_data).mark_bar(color="#00FFFF").encode(
     x=alt.X('Position', 
             title="Screen Position", 
             scale=alt.Scale(domain=[-LY/2, LY/2])),
     y=alt.Y('Counts', 
-            title="Particle Hits"),
+            title="Particle Hits",
+            scale=alt.Scale(domain=[0, y_limit])),
     tooltip=['Position', 'Counts']
 ).properties(
     height=400
