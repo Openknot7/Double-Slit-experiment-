@@ -1,5 +1,6 @@
 import streamlit as st
 import numpy as np
+import pandas as pd
 import time
 from PIL import Image
 
@@ -265,8 +266,10 @@ stat_placeholder.metric("Frames", st.session_state.frame_count)
 stat_placeholder.metric("Detections", len(st.session_state.hits))
 
 # Render wave function
-img = create_visualization(st.session_state.psi, V, gain, barrier_idx)
-plot_spot.image(img, use_container_width=True, channels="RGB")
+img_array = create_visualization(st.session_state.psi, V, gain, barrier_idx)
+# Convert to PIL Image for proper display
+pil_img = Image.fromarray(img_array, mode='RGB')
+plot_spot.image(pil_img, use_container_width=True)
 
 # Render detection histogram
 if len(st.session_state.hits) > 5:  # Only show real chart when we have enough data
@@ -277,8 +280,9 @@ if len(st.session_state.hits) > 5:  # Only show real chart when we have enough d
         range=(-LY/2, LY/2)
     )
     
-    # Display as bar chart
-    hist_spot.bar_chart(counts, color="#00FFFF", height=400)
+    # Convert to DataFrame to avoid infinite extent warnings
+    chart_data = pd.DataFrame({'counts': counts})
+    hist_spot.bar_chart(chart_data, color="#00FFFF", height=400)
     
     # Show interference pattern info
     if len(st.session_state.hits) > 50:
@@ -288,14 +292,14 @@ if len(st.session_state.hits) > 5:  # Only show real chart when we have enough d
         
 elif len(st.session_state.hits) > 0:
     # Show minimal chart with few detections
-    counts = np.zeros(40)
-    hist_spot.bar_chart(counts, color="#00FFFF", height=400)
+    chart_data = pd.DataFrame({'counts': np.zeros(40)})
+    hist_spot.bar_chart(chart_data, color="#00FFFF", height=400)
     info_spot.info(f"Collecting data... ({len(st.session_state.hits)} particles)")
     
 else:
     # Show empty chart placeholder
-    counts = np.zeros(40)
-    hist_spot.bar_chart(counts, color="#00FFFF", height=400)
+    chart_data = pd.DataFrame({'counts': np.zeros(40)})
+    hist_spot.bar_chart(chart_data, color="#00FFFF", height=400)
     info_spot.warning("⏳ Waiting for wave to reach detector...")
 
 # =========================================================
