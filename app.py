@@ -1,310 +1,173 @@
 import streamlit as st
 import numpy as np
 import pandas as pd
-import time
 from PIL import Image
 
-# =========================================================
-# 1. CONFIG & SETUP
-# =========================================================
-st.set_page_config(
-    page_title="Quantum Double-Slit Experiment",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+# Page config
+st.set_page_config(page_title="Double-Slit Quantum Simulation", layout="wide")
 
-# --- Performance Settings ---
-NX, NY = 256, 256  # Increased resolution for smoother visualization
-LX, LY = 16.0, 16.0
+# Constants
+NX, NY = 180, 180
+LX, LY = 10.0, 10.0
 
-# =========================================================
-# 2. MATH ENGINE (Cached for Speed)
-# =========================================================
+# Setup grid
 @st.cache_data
-def get_grid(nx, ny, lx, ly):
-    """Generate the coordinate systems."""
-    x = np.linspace(-lx/2, lx/2, nx)
-    y = np.linspace(-ly/2, ly/2, ny)
+def get_grids():
+    x = np.linspace(-LX/2, LX/2, NX)
+    y = np.linspace(-LY/2, LY/2, NY)
     dx = x[1] - x[0]
     dy = y[1] - y[0]
     X, Y = np.meshgrid(x, y)
     
-    # Momentum space for FFT
-    kx = 2 * np.pi * np.fft.fftfreq(nx, dx)
-    ky = 2 * np.pi * np.fft.fftfreq(ny, dy)
+    kx = 2 * np.pi * np.fft.fftfreq(NX, dx)
+    ky = 2 * np.pi * np.fft.fftfreq(NY, dy)
     KX, KY = np.meshgrid(kx, ky)
     K2 = KX**2 + KY**2
-    return x, y, X, Y, K2, dx, dy
+    
+    return x, y, X, Y, K2
 
+# Create barrier
 @st.cache_data
-def get_potential(nx, ny, x, y):
-    """Generate the double slit barrier."""
-    V = np.zeros((ny, nx))
+def get_barrier():
+    V = np.zeros((NY, NX))
+    barrier_x = int(NX * 0.5)
     
-    # Barrier Parameters
-    barrier_x_idx = int(nx * 0.45)  # Barrier at 45% of width
-    barrier_thickness = 2  # Make barrier thicker
-    slit_width = 1.2
-    slit_sep = 2.5
+    # Wall
+    V[:, barrier_x] = 1e6
     
-    # Draw Barrier (with thickness)
-    for i in range(barrier_thickness):
-        idx = barrier_x_idx + i
-        if idx < nx:
-            V[:, idx] = 1e5
+    # Slits
+    center = NY // 2
+    gap = 15
+    width = 8
     
-    # Cut Slits
-    y_arr = y.reshape(-1, 1)
-    mask_slit1 = np.abs(y_arr - slit_sep/2) < slit_width/2
-    mask_slit2 = np.abs(y_arr + slit_sep/2) < slit_width/2
+    V[center - gap - width:center - gap + width, barrier_x] = 0
+    V[center + gap - width:center + gap + width, barrier_x] = 0
     
-    for i in range(barrier_thickness):
-        idx = barrier_x_idx + i
-        if idx < nx:
-            V[mask_slit1.flatten(), idx] = 0
-            V[mask_slit2.flatten(), idx] = 0
-    
-    return V, barrier_x_idx
+    return V
 
-def init_psi(X, Y):
-    """Create the initial Gaussian wave packet."""
-    x0, y0 = -5.5, 0.0
-    sigma = 0.8
-    k0 = 6.0  # Momentum to the right
+# Initial wave
+def init_wave(X, Y):
+    x0, y0 = -3.5, 0.0
+    sigma = 0.6
+    k0 = 10.0
     
-    # Gaussian * Plane Wave
     psi = np.exp(-((X - x0)**2 + (Y - y0)**2) / (2 * sigma**2))
-    psi = psi.astype(np.complex128)
-    psi *= np.exp(1j * k0 * X)
+    psi = psi.astype(np.complex128) * np.exp(1j * k0 * X)
+    psi /= np.sqrt(np.sum(np.abs(psi)**2))
     
-    # Normalize
-    norm = np.sqrt(np.sum(np.abs(psi)**2) * (LX/NX) * (LY/NY))
-    psi /= norm
     return psi
 
-# Load Physics Objects
-x, y, X, Y, K2, dx, dy = get_grid(NX, NY, LX, LY)
-V, barrier_idx = get_potential(NX, NY, x, y)
+# Get grids and barrier
+x, y, X, Y, K2 = get_grids()
+V = get_barrier()
 
-# =========================================================
-# 3. APP STATE MANAGEMENT
-# =========================================================
+# Initialize state
 if 'psi' not in st.session_state:
-    st.session_state.psi = init_psi(X, Y)
+    st.session_state.psi = init_wave(X, Y)
     st.session_state.running = False
     st.session_state.hits = []
-    st.session_state.frame_count = 0
-    st.session_state.total_time = 0.0
+    st.session_state.frames = 0
 
-# =========================================================
-# 4. SIDEBAR CONTROLS
-# =========================================================
-st.sidebar.title("⚛️ Quantum Controls")
-st.sidebar.markdown("---")
+# Sidebar
+st.sidebar.title("Controls")
 
-col1, col2, col3 = st.sidebar.columns(3)
-start_btn = col1.button("▶️", use_container_width=True, help="Start Simulation")
-pause_btn = col2.button("⏸️", use_container_width=True, help="Pause Simulation")
-reset_btn = col3.button("🔄", use_container_width=True, help="Reset Simulation")
-
-# Logic to handle buttons
-if start_btn:
+c1, c2, c3 = st.sidebar.columns(3)
+if c1.button("▶️"):
     st.session_state.running = True
-if pause_btn:
+if c2.button("⏸️"):
     st.session_state.running = False
-if reset_btn:
-    st.session_state.psi = init_psi(X, Y)
+if c3.button("🔄"):
+    st.session_state.psi = init_wave(X, Y)
     st.session_state.hits = []
-    st.session_state.frame_count = 0
-    st.session_state.total_time = 0.0
+    st.session_state.frames = 0
     st.session_state.running = False
 
-st.sidebar.markdown("---")
-st.sidebar.subheader("⚙️ Parameters")
-steps_per_frame = st.sidebar.slider("Time Steps/Frame", 1, 15, 8, 
-                                     help="More steps = faster wave propagation")
-gain = st.sidebar.slider("Brightness", 1.0, 15.0, 5.0, 
-                         help="Amplify wave visibility")
-detection_rate = st.sidebar.slider("Detection Rate", 0.1, 1.0, 0.3, step=0.1,
-                                   help="Probability of particle detection per frame")
+st.sidebar.write("---")
+speed = st.sidebar.slider("Speed", 1, 15, 8)
+gain = st.sidebar.slider("Brightness", 1.0, 15.0, 6.0)
 
-st.sidebar.markdown("---")
-st.sidebar.subheader("📊 Statistics")
-stat_placeholder = st.sidebar.empty()
+st.sidebar.write("---")
+st.sidebar.write(f"Frames: {st.session_state.frames}")
+st.sidebar.write(f"Detections: {len(st.session_state.hits)}")
 
-st.sidebar.markdown("---")
-st.sidebar.info("""
-**About This Simulation**
-
-This demonstrates the quantum double-slit experiment using the Schrödinger equation. 
-
-- **Cyan wave**: Probability amplitude
-- **White barrier**: Double slit
-- **Right panel**: Detected particles
-- **Pattern**: Wave interference creates bands
-""")
-
-# =========================================================
-# 5. MAIN DISPLAY
-# =========================================================
+# Main display
 st.title("🌊 Quantum Double-Slit Experiment")
-st.markdown("### Real-time simulation of wave-particle duality")
-st.markdown("---")
 
-col_left, col_right = st.columns([2.5, 1])
+col1, col2 = st.columns([2.5, 1])
 
-with col_left:
-    wave_container = st.container()
-    with wave_container:
-        st.markdown("**Wave Function Evolution**")
-        plot_spot = st.empty()
+with col1:
+    st.write("**Wave Function**")
+    wave_spot = st.empty()
 
-with col_right:
-    detection_container = st.container()
-    with detection_container:
-        st.markdown("**Particle Detection Pattern**")
-        hist_spot = st.empty()
-        info_spot = st.empty()
+with col2:
+    st.write("**Detection Pattern**")
+    hist_spot = st.empty()
+    info_spot = st.empty()
 
-# =========================================================
-# 6. SIMULATION LOOP
-# =========================================================
-dt = 0.004  # Smaller timestep for stability
+# Physics step
+dt = 0.004
 
-def evolve_wavefunction(psi, V, K2, dt, steps):
-    """Evolve the wave function using split-step Fourier method."""
-    for _ in range(steps):
-        # Half-step potential
+if st.session_state.running:
+    psi = st.session_state.psi
+    
+    for _ in range(speed):
         psi *= np.exp(-0.5j * V * dt)
-        
-        # Full-step kinetic in Fourier space
         psi_k = np.fft.fft2(psi)
         psi_k *= np.exp(-0.5j * K2 * dt)
         psi = np.fft.ifft2(psi_k)
-        
-        # Half-step potential
         psi *= np.exp(-0.5j * V * dt)
     
-    return psi
+    st.session_state.psi = psi
+    st.session_state.frames += 1
+    
+    # Detection
+    screen_x = int(NX * 0.85)
+    probs = np.abs(psi[:, screen_x])**2
+    total = np.sum(probs)
+    
+    if total > 1e-5:
+        probs = probs / total
+        if np.random.rand() < 0.3 and np.all(np.isfinite(probs)) and abs(np.sum(probs) - 1.0) < 0.01:
+            try:
+                idx = np.random.choice(NY, p=probs)
+                st.session_state.hits.append(y[idx])
+            except:
+                pass
 
-def create_visualization(psi, V, gain, barrier_idx):
-    """Create the wave visualization image."""
-    intensity = np.abs(psi)**2
-    
-    # Normalize intensity
-    max_val = np.max(intensity)
-    if max_val < 1e-12:
-        max_val = 1e-12
-    
-    # Apply gain and normalize to 0-1
-    norm_intensity = np.clip(intensity * gain / max_val, 0, 1)
-    
-    # Create RGB image
-    img = np.zeros((NY, NX, 3), dtype=np.uint8)
-    
-    # Cyan color for wave (gradient based on intensity)
-    img[..., 1] = (norm_intensity * 255).astype(np.uint8)  # Green
-    img[..., 2] = (norm_intensity * 255).astype(np.uint8)  # Blue
-    
-    # Add slight red tint to high-intensity areas for better visibility
-    high_intensity = norm_intensity > 0.5
-    img[high_intensity, 0] = ((norm_intensity[high_intensity] - 0.5) * 2 * 100).astype(np.uint8)
-    
-    # Draw barrier in white
-    barrier_mask = V > 1000
-    img[barrier_mask] = [255, 255, 255]
-    
-    # Add detection screen indicator (faint vertical line)
-    screen_x = int(NX * 0.82)
-    img[:, screen_x, :] = img[:, screen_x, :] // 2 + 80
-    
-    return img
+# Render wave
+intensity = np.abs(st.session_state.psi)**2
+max_i = np.max(intensity) if np.max(intensity) > 0 else 1e-10
+norm = np.clip(intensity * gain / max_i, 0, 1)
 
-if st.session_state.running:
-    # Evolve wave function
-    st.session_state.psi = evolve_wavefunction(
-        st.session_state.psi, V, K2, dt, steps_per_frame
-    )
-    
-    st.session_state.frame_count += 1
-    st.session_state.total_time += dt * steps_per_frame
-    
-    # Detection at screen
-    screen_x = int(NX * 0.82)
-    prob_slice = np.abs(st.session_state.psi[:, screen_x])**2
-    total_p = np.sum(prob_slice)
-    
-    # If wave has reached the screen
-    if total_p > 1e-6:
-        # Normalize to probability distribution
-        pdf = prob_slice / total_p
-        
-        # Ensure PDF is valid (sums to 1, no NaNs or negatives)
-        pdf = np.nan_to_num(pdf, nan=0.0, posinf=0.0, neginf=0.0)
-        pdf = np.abs(pdf)  # Ensure all positive
-        pdf_sum = np.sum(pdf)
-        
-        if pdf_sum > 0:
-            pdf = pdf / pdf_sum  # Renormalize
-            
-            # Detect particles based on probability
-            if np.random.rand() < detection_rate:
-                try:
-                    hit_idx = np.random.choice(len(y), p=pdf)
-                    st.session_state.hits.append(y[hit_idx])
-                except ValueError:
-                    # If still invalid, skip this detection
-                    pass
+img = np.zeros((NY, NX, 3), dtype=np.uint8)
+img[:, :, 1] = (norm * 255).astype(np.uint8)
+img[:, :, 2] = (norm * 255).astype(np.uint8)
 
-# =========================================================
-# 7. RENDERING
-# =========================================================
+# Barrier
+barrier = V > 100
+img[barrier] = 255
 
-# Update statistics
-stat_placeholder.metric("Simulation Time", f"{st.session_state.total_time:.2f} a.u.")
-stat_placeholder.metric("Frames", st.session_state.frame_count)
-stat_placeholder.metric("Detections", len(st.session_state.hits))
+# Convert and display
+pil_image = Image.fromarray(img, 'RGB')
+wave_spot.image(pil_image, use_column_width=True)
 
-# Render wave function
-img_array = create_visualization(st.session_state.psi, V, gain, barrier_idx)
-# Convert to PIL Image for proper display
-pil_img = Image.fromarray(img_array, mode='RGB')
-plot_spot.image(pil_img, use_container_width=True)
-
-# Render detection histogram
-if len(st.session_state.hits) > 5:  # Only show real chart when we have enough data
-    # Create histogram
-    counts, bin_edges = np.histogram(
-        st.session_state.hits, 
-        bins=40, 
-        range=(-LY/2, LY/2)
-    )
+# Render histogram
+if len(st.session_state.hits) > 3:
+    counts, _ = np.histogram(st.session_state.hits, bins=40, range=(y.min(), y.max()))
+    df = pd.DataFrame({'count': counts})
+    hist_spot.bar_chart(df, height=350, color="#00FFFF")
     
-    # Convert to DataFrame to avoid infinite extent warnings
-    chart_data = pd.DataFrame({'counts': counts})
-    hist_spot.bar_chart(chart_data, color="#00FFFF", height=400)
-    
-    # Show interference pattern info
-    if len(st.session_state.hits) > 50:
-        info_spot.success(f"✅ Interference pattern emerging! ({len(st.session_state.hits)} particles)")
+    if len(st.session_state.hits) > 80:
+        info_spot.success(f"✅ Pattern! ({len(st.session_state.hits)})")
     else:
-        info_spot.info(f"Collecting data... ({len(st.session_state.hits)} particles)")
-        
-elif len(st.session_state.hits) > 0:
-    # Show minimal chart with few detections
-    chart_data = pd.DataFrame({'counts': np.zeros(40)})
-    hist_spot.bar_chart(chart_data, color="#00FFFF", height=400)
-    info_spot.info(f"Collecting data... ({len(st.session_state.hits)} particles)")
-    
+        info_spot.info(f"Building... ({len(st.session_state.hits)})")
 else:
-    # Show empty chart placeholder
-    chart_data = pd.DataFrame({'counts': np.zeros(40)})
-    hist_spot.bar_chart(chart_data, color="#00FFFF", height=400)
-    info_spot.warning("⏳ Waiting for wave to reach detector...")
+    df = pd.DataFrame({'count': np.zeros(40)})
+    hist_spot.bar_chart(df, height=350, color="#00FFFF")
+    info_spot.warning("⏳ Waiting...")
 
-# =========================================================
-# 8. AUTO-RERUN LOGIC
-# =========================================================
+# Loop
 if st.session_state.running:
-    time.sleep(0.03)  # Control frame rate (~30 FPS)
+    import time
+    time.sleep(0.025)
     st.rerun()
