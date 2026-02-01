@@ -317,5 +317,5 @@ else:
 # 8. AUTO-RERUN LOGIC
 # =========================================================
 if st.session_state.running:
-    time.sleep(0.03)  # Control frame rate (~30 FPS)
+    time.sleep(0.06)  # Control frame rate (~15 FPS) to prevent connection issues
     st.rerun()
